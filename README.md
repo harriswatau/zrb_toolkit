@@ -301,9 +301,6 @@ Consider adding a `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` for your community 
 
 Add badges once CI and publishing are configured:
 
-```md
-https://img.shields.io/badge/CI-GitHub%20Actions-blue]()
-https://img.shields.io/badge/License-MIT-yellow.svg]()
-https://img.shields.io/badge/Docs-MkDocs%20Material-4caf50]()
-https://img.shields.io/badge/Python-3.9+-blue.svg]()
-```
+
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg) ![License MIT](https://img.shields.io/badge/license-MIT-green.svg) ![Build passing](https://img.shields.io/badge/build-passing-brightgreen.svg) ![Status alpha](https://img.shields.io/badge/status-alpha-orange.svg)
+

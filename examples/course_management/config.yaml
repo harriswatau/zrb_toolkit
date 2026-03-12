@@ -1,0 +1,128 @@
+
+zones:
+  - id: root
+    name: University
+  - id: eng
+    name: Faculty of Engineering
+    parent_id: root
+  - id: cs
+    name: Computer Science
+    parent_id: eng
+  - id: ee
+    name: Electrical Engineering
+    parent_id: eng
+  - id: arts
+    name: Faculty of Arts
+    parent_id: root
+  - id: hist
+    name: History
+    parent_id: arts
+  - id: phil
+    name: Philosophy
+    parent_id: arts
+
+roles:
+  - id: admin
+    zone_id: root
+    name: Admin
+    base_permissions: ["user:manage", "zone:manage"]
+  - id: dean_eng
+    zone_id: eng
+    name: Dean
+    base_permissions: ["course:create", "faculty:report"]
+  - id: prof_eng
+    zone_id: eng
+    name: Professor
+    base_permissions: ["grade:submit", "course:view"]
+  - id: student_eng
+    zone_id: eng
+    name: Student
+    base_permissions: ["grade:view", "course:enroll"]
+  - id: ta_eng
+    zone_id: eng
+    name: TA
+    base_permissions: ["grade:enter"]
+  - id: head_cs
+    zone_id: cs
+    name: DeptHead
+    base_permissions: ["schedule:manage", "prof:assign"]
+    parent_role_id: prof_cs   # intra-zone hierarchy
+  - id: prof_cs
+    zone_id: cs
+    name: Professor
+    base_permissions: []   # inherits from prof_eng via gamma
+  - id: student_cs
+    zone_id: cs
+    name: Student
+    base_permissions: []
+  - id: ta_cs
+    zone_id: cs
+    name: TA
+    base_permissions: []
+  # similarly for other zones...
+
+gamma_mappings:
+  - child_zone_id: cs
+    child_role_id: head_cs
+    parent_zone_id: eng
+    parent_role_id: dean_eng
+  - child_zone_id: cs
+    child_role_id: prof_cs
+    parent_zone_id: eng
+    parent_role_id: prof_eng
+  - child_zone_id: cs
+    child_role_id: student_cs
+    parent_zone_id: eng
+    parent_role_id: student_eng
+  - child_zone_id: cs
+    child_role_id: ta_cs
+    parent_zone_id: eng
+    parent_role_id: ta_eng
+  # similarly for ee, hist, phil...
+
+constraints:
+  - id: sod_student_ta
+    type: separation_of_duty
+    target: { user_id: "*", operation_id: "grade:enter" }
+    condition: { cannot_have_role: "student" }
+    is_negative: true
+  - id: temporal_grade_submit
+    type: temporal
+    target: { operation_id: "grade:submit" }
+    condition: { time_range: ["2025-05-01T00:00", "2025-06-15T23:59"] }
+    is_negative: false   # positive constraint: only allowed during this period
+
+operations:
+  - id: user:manage
+    app_name: admin
+    name: Manage users
+  - id: zone:manage
+    app_name: admin
+    name: Manage zones
+  - id: course:create
+    app_name: curriculum
+    name: Create course
+  - id: faculty:report
+    app_name: reports
+    name: View faculty report
+  - id: grade:submit
+    app_name: grading
+    name: Submit grades
+  - id: course:view
+    app_name: curriculum
+    name: View courses
+  - id: grade:view
+    app_name: grading
+    name: View grades
+  - id: course:enroll
+    app_name: enrollment
+    name: Enroll in course
+  - id: grade:enter
+    app_name: grading
+    name: Enter grades (TA)
+  - id: schedule:manage
+    app_name: schedule
+    name: Manage schedule
+  - id: prof:assign
+    app_name: faculty
+    name: Assign professor

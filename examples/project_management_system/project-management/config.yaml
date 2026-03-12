@@ -1,0 +1,231 @@
+zones:
+  - id: org
+    name: Organization
+  - id: pmo
+    name: Project Management Office
+    parent_id: org
+  - id: alpha
+    name: Project Alpha
+    parent_id: org
+  - id: alpha_dev
+    name: Development Team
+    parent_id: alpha
+  - id: alpha_qa
+    name: QA Team
+    parent_id: alpha
+  - id: beta
+    name: Project Beta
+    parent_id: org
+  - id: beta_dev
+    name: Development Team
+    parent_id: beta
+  - id: beta_qa
+    name: QA Team
+    parent_id: beta
+
+operations:
+  # Organization level
+  - id: project:create
+    app_name: admin
+    name: Create new project
+  - id: user:manage
+    app_name: admin
+    name: Manage users
+
+  # Project management
+  - id: task:assign
+    app_name: project
+    name: Assign task
+  - id: milestone:set
+    app_name: project
+    name: Set milestone
+  - id: report:view
+    app_name: project
+    name: View project report
+
+  # Development
+  - id: task:update
+    app_name: development
+    name: Update task status
+  - id: code:commit
+    app_name: development
+    name: Commit code
+  - id: review:approve
+    app_name: development
+    name: Approve pull request
+
+  # QA
+  - id: bug:report
+    app_name: qa
+    name: Report bug
+  - id: test:run
+    app_name: qa
+    name: Run tests
+  - id: test:plan
+    app_name: qa
+    name: Plan test suite
+
+  # PMO
+  - id: portfolio:report
+    app_name: pmo
+    name: View portfolio report
+
+roles:
+  # Organization admin
+  - id: admin
+    zone_id: org
+    name: System Administrator
+    base_permissions: ["project:create", "user:manage"]
+
+  # PMO analyst
+  - id: analyst
+    zone_id: pmo
+    name: PMO Analyst
+    base_permissions: ["portfolio:report"]
+
+  # Project Alpha roles
+  - id: pm_alpha
+    zone_id: alpha
+    name: Project Manager
+    base_permissions: ["task:assign", "milestone:set", "report:view"]
+  - id: dev_alpha
+    zone_id: alpha
+    name: Developer
+    base_permissions: ["task:update", "code:commit"]
+  - id: tester_alpha
+    zone_id: alpha
+    name: Tester
+    base_permissions: ["bug:report", "test:run"]
+
+  # Alpha Development Team roles
+  - id: lead_dev_alpha
+    zone_id: alpha_dev
+    name: Lead Developer
+    base_permissions: ["review:approve"]   # plus inherits dev_alpha via gamma
+
+  # Alpha QA Team roles
+  - id: lead_tester_alpha
+    zone_id: alpha_qa
+    name: Lead Tester
+    base_permissions: ["test:plan"]        # plus inherits tester_alpha via gamma
+
+  # Project Beta roles (similar)
+  - id: pm_beta
+    zone_id: beta
+    name: Project Manager
+    base_permissions: ["task:assign", "milestone:set", "report:view"]
+  - id: dev_beta
+    zone_id: beta
+    name: Developer
+    base_permissions: ["task:update", "code:commit"]
+  - id: tester_beta
+    zone_id: beta
+    name: Tester
+    base_permissions: ["bug:report", "test:run"]
+
+  - id: lead_dev_beta
+    zone_id: beta_dev
+    name: Lead Developer
+    base_permissions: ["review:approve"]
+
+  - id: lead_tester_beta
+    zone_id: beta_qa
+    name: Lead Tester
+    base_permissions: ["test:plan"]
+
+# Intra‑zone hierarchies (optional, not used here)
+# role_hierarchy: []
+
+# Gamma mappings (inter‑zone inheritance)
+gamma_mappings:
+  # Alpha team leads inherit from corresponding project roles
+  - child_zone_id: alpha_dev
+    child_role_id: lead_dev_alpha
+    parent_zone_id: alpha
+    parent_role_id: dev_alpha
+    priority: 1
+  - child_zone_id: alpha_qa
+    child_role_id: lead_tester_alpha
+    parent_zone_id: alpha
+    parent_role_id: tester_alpha
+    priority: 1
+  # Beta team leads inherit from corresponding project roles
+  - child_zone_id: beta_dev
+    child_role_id: lead_dev_beta
+    parent_zone_id: beta
+    parent_role_id: dev_beta
+    priority: 1
+  - child_zone_id: beta_qa
+    child_role_id: lead_tester_beta
+    parent_zone_id: beta
+    parent_role_id: tester_beta
+    priority: 1
+
+constraints:
+  # Separation of duty: a developer cannot approve their own pull request
+  - id: sod_self_approve
+    type: separation_of_duty
+    target: { operation_id: "review:approve" }
+    condition: { prohibited_relation: "self", attribute: "author_id" }
+    is_negative: true
+    priority: 10
+
+  # Context constraint: test:run only allowed in QA environment
+  - id: context_test_env
+    type: context
+    target: { operation_id: "test:run" }
+    condition: { environment: "qa" }
+    is_negative: false   # positive: must match
+    priority: 10
+
+# Sample users
+users:
+  - id: u1
+    username: alice
+    email: alice@org.com
+    attributes: { role: "project_manager" }
+  - id: u2
+    username: bob
+    email: bob@org.com
+    attributes: { role: "developer" }
+  - id: u3
+    username: carol
+    email: carol@org.com
+    attributes: { role: "tester" }
+  - id: u4
+    username: dave
+    email: dave@org.com
+    attributes: { role: "lead_dev" }
+  - id: u5
+    username: eve
+    email: eve@org.com
+    attributes: { role: "analyst" }
+
+# User‑Zone‑Role assignments
+assignments:
+  # Alice: Project Manager of Alpha
+  - user_id: u1
+    zone_id: alpha
+    role_id: pm_alpha
+  # Bob: Developer in Alpha (and also in Alpha Dev Team, but lead_dev is separate)
+  - user_id: u2
+    zone_id: alpha
+    role_id: dev_alpha
+  - user_id: u2
+    zone_id: alpha_dev
+    role_id: lead_dev_alpha   # Bob is lead dev in Alpha
+  # Carol: Tester in Alpha
+  - user_id: u3
+    zone_id: alpha
+    role_id: tester_alpha
+  - user_id: u3
+    zone_id: alpha_qa
+    role_id: lead_tester_alpha   # Carol is lead tester in Alpha
+  # Dave: Project Manager of Beta
+  - user_id: u4
+    zone_id: beta
+    role_id: pm_beta
+  # Eve: PMO Analyst
+  - user_id: u5
+    zone_id: pmo
+    role_id: analyst

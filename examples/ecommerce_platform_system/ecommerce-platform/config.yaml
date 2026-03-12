@@ -1,0 +1,265 @@
+zones:
+  - id: company
+    name: Company
+  - id: sales
+    name: Sales Division
+    parent_id: company
+  - id: online_sales
+    name: Online Sales Team
+    parent_id: sales
+  - id: retail_sales
+    name: Retail Sales Team
+    parent_id: sales
+  - id: inventory
+    name: Inventory Division
+    parent_id: company
+  - id: warehouse_a
+    name: Warehouse A
+    parent_id: inventory
+  - id: warehouse_b
+    name: Warehouse B
+    parent_id: inventory
+  - id: shipping
+    name: Shipping Division
+    parent_id: company
+  - id: domestic_shipping
+    name: Domestic Shipping
+    parent_id: shipping
+  - id: international_shipping
+    name: International Shipping
+    parent_id: shipping
+
+operations:
+  # Company level
+  - id: company:report
+    app_name: reports
+    name: View company report
+  - id: all:access
+    app_name: admin
+    name: Superuser access
+
+  # Sales
+  - id: discount:approve
+    app_name: sales
+    name: Approve discount
+  - id: sales:report
+    app_name: sales
+    name: View sales report
+  - id: order:create
+    app_name: orders
+    name: Create order
+  - id: order:modify
+    app_name: orders
+    name: Modify order
+
+  # Inventory
+  - id: stock:adjust
+    app_name: inventory
+    name: Adjust stock
+  - id: reorder
+    app_name: inventory
+    name: Reorder products
+  - id: stock:update
+    app_name: inventory
+    name: Update stock count
+  - id: zone:A_access
+    app_name: inventory
+    name: Access Warehouse A
+  - id: zone:B_access
+    app_name: inventory
+    name: Access Warehouse B
+
+  # Shipping
+  - id: ship:schedule
+    app_name: shipping
+    name: Schedule shipment
+  - id: ship:process
+    app_name: shipping
+    name: Process shipment
+
+roles:
+  # Company
+  - id: ceo
+    zone_id: company
+    name: CEO
+    base_permissions: ["company:report", "all:access"]
+
+  # Sales Division
+  - id: sales_manager
+    zone_id: sales
+    name: Sales Manager
+    base_permissions: ["discount:approve", "sales:report"]
+  - id: sales_rep
+    zone_id: sales
+    name: Sales Representative
+    base_permissions: ["order:create", "order:modify"]
+
+  # Online Sales Team
+  - id: online_rep
+    zone_id: online_sales
+    name: Online Sales Rep
+    base_permissions: []   # inherits from sales_rep
+
+  # Retail Sales Team
+  - id: retail_rep
+    zone_id: retail_sales
+    name: Retail Sales Rep
+    base_permissions: []   # inherits from sales_rep
+
+  # Inventory Division
+  - id: inventory_manager
+    zone_id: inventory
+    name: Inventory Manager
+    base_permissions: ["stock:adjust", "reorder"]
+  - id: inventory_clerk
+    zone_id: inventory
+    name: Inventory Clerk
+    base_permissions: ["stock:update"]
+
+  # Warehouse A
+  - id: clerk_a
+    zone_id: warehouse_a
+    name: Warehouse A Clerk
+    base_permissions: ["zone:A_access"]   # plus inherits inventory_clerk
+
+  # Warehouse B
+  - id: clerk_b
+    zone_id: warehouse_b
+    name: Warehouse B Clerk
+    base_permissions: ["zone:B_access"]   # plus inherits inventory_clerk
+
+  # Shipping Division
+  - id: shipping_manager
+    zone_id: shipping
+    name: Shipping Manager
+    base_permissions: ["ship:schedule"]
+  - id: shipper
+    zone_id: shipping
+    name: Shipper
+    base_permissions: ["ship:process"]
+
+  # Domestic Shipping
+  - id: domestic_shipper
+    zone_id: domestic_shipping
+    name: Domestic Shipper
+    base_permissions: []   # inherits from shipper
+
+  # International Shipping
+  - id: international_shipper
+    zone_id: international_shipping
+    name: International Shipper
+    base_permissions: []   # inherits from shipper
+
+# Intra‑zone hierarchies (parent_role_id indicates seniority)
+# In Sales: manager > rep
+# In Inventory: manager > clerk
+# In Shipping: manager > shipper
+role_hierarchy:
+  - role_id: sales_manager
+    parent_role_id: sales_rep
+  - role_id: inventory_manager
+    parent_role_id: inventory_clerk
+  - role_id: shipping_manager
+    parent_role_id: shipper
+
+# Gamma mappings (inter‑zone inheritance)
+gamma_mappings:
+  # Online sales rep inherits from sales rep
+  - child_zone_id: online_sales
+    child_role_id: online_rep
+    parent_zone_id: sales
+    parent_role_id: sales_rep
+    priority: 1
+  # Retail sales rep inherits from sales rep
+  - child_zone_id: retail_sales
+    child_role_id: retail_rep
+    parent_zone_id: sales
+    parent_role_id: sales_rep
+    priority: 1
+  # Warehouse A clerk inherits from inventory clerk
+  - child_zone_id: warehouse_a
+    child_role_id: clerk_a
+    parent_zone_id: inventory
+    parent_role_id: inventory_clerk
+    priority: 1
+  # Warehouse B clerk inherits from inventory clerk
+  - child_zone_id: warehouse_b
+    child_role_id: clerk_b
+    parent_zone_id: inventory
+    parent_role_id: inventory_clerk
+    priority: 1
+  # Domestic shipper inherits from shipper
+  - child_zone_id: domestic_shipping
+    child_role_id: domestic_shipper
+    parent_zone_id: shipping
+    parent_role_id: shipper
+    priority: 1
+  # International shipper inherits from shipper
+  - child_zone_id: international_shipping
+    child_role_id: international_shipper
+    parent_zone_id: shipping
+    parent_role_id: shipper
+    priority: 1
+
+constraints:
+  # Separation of duty: a sales rep cannot approve their own discount
+  - id: sod_self_discount
+    type: separation_of_duty
+    target: { operation_id: "discount:approve" }
+    condition: { prohibited_relation: "self" }
+    is_negative: true
+    priority: 10
+
+  # Attribute‑based: reorder only if stock < threshold
+  - id: attr_reorder
+    type: attribute
+    target: { operation_id: "reorder" }
+    condition:
+      attribute: "stock_level"
+      operator: "<"
+      value: 10
+    is_negative: false   # positive constraint: must be satisfied
+    priority: 10
+
+# Sample users
+users:
+  - id: u1
+    username: alice
+    email: alice@company.com
+    attributes: { department: sales }
+  - id: u2
+    username: bob
+    email: bob@company.com
+    attributes: { department: inventory }
+  - id: u3
+    username: carol
+    email: carol@company.com
+    attributes: { department: shipping }
+  - id: u4
+    username: dave
+    email: dave@company.com
+    attributes: { department: sales, team: online }
+
+# User‑Zone‑Role assignments
+assignments:
+  - user_id: u1
+    zone_id: sales
+    role_id: sales_rep
+  - user_id: u1
+    zone_id: online_sales
+    role_id: online_rep
+  - user_id: u2
+    zone_id: inventory
+    role_id: inventory_clerk
+  - user_id: u2
+    zone_id: warehouse_a
+    role_id: clerk_a
+  - user_id: u3
+    zone_id: shipping
+    role_id: shipper
+  - user_id: u3
+    zone_id: domestic_shipping
+    role_id: domestic_shipper
+  - user_id: u4
+    zone_id: sales
+    role_id: sales_manager   # Dave is manager, also assigned as rep? Not needed because hierarchy gives inheritance.
