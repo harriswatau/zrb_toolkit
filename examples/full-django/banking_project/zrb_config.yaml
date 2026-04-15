@@ -1,0 +1,252 @@
+
+zones:
+  - id: bank
+    name: Bank
+  - id: branch_a
+    name: Branch A
+    parent_id: bank
+  - id: branch_a_loans
+    name: Loans Department
+    parent_id: branch_a
+  - id: branch_a_accounts
+    name: Accounts Department
+    parent_id: branch_a
+  - id: branch_b
+    name: Branch B
+    parent_id: bank
+  - id: branch_b_loans
+    name: Loans Department
+    parent_id: branch_b
+  - id: branch_b_accounts
+    name: Accounts Department
+    parent_id: branch_b
+  - id: head_office
+    name: Head Office
+    parent_id: bank
+  - id: risk
+    name: Risk Management
+    parent_id: head_office
+  - id: audit
+    name: Audit
+    parent_id: head_office
+
+operations:
+  # Bank-level
+  - id: branch:manage
+    app_name: admin
+    name: Manage branches
+  - id: audit:log
+    app_name: admin
+    name: View audit log
+
+  # Branch management
+  - id: transaction:approve_high
+    app_name: branch
+    name: Approve high-value transaction
+  - id: staff:manage
+    app_name: branch
+    name: Manage staff
+
+  # Teller operations
+  - id: deposit
+    app_name: teller
+    name: Deposit money
+  - id: withdraw
+    app_name: teller
+    name: Withdraw money
+  - id: balance:view
+    app_name: teller
+    name: View account balance
+
+  # Loans
+  - id: loan:process
+    app_name: loans
+    name: Process loan application
+  - id: credit:check
+    app_name: loans
+    name: Check credit score
+  - id: loan:approve
+    app_name: loans
+    name: Approve loan
+
+  # Accounts
+  - id: account:open
+    app_name: accounts
+    name: Open account
+  - id: account:close
+    app_name: accounts
+    name: Close account
+
+  # Risk
+  - id: risk:report
+    app_name: risk
+    name: View risk report
+  - id: limit:set
+    app_name: risk
+    name: Set exposure limits
+
+  # Audit
+  - id: audit:view_all
+    app_name: audit
+    name: View all audit records
+
+roles:
+  # Bank system admin
+  - id: sysadmin
+    zone_id: bank
+    name: System Admin
+    base_permissions: ["branch:manage", "audit:log"]
+
+  # Branch roles (generic, applied to each branch)
+  - id: branch_manager
+    zone_id: branch_a   # will be cloned for other branches; but we need separate roles per branch
+    name: Branch Manager
+    base_permissions: ["transaction:approve_high", "staff:manage"]
+  - id: teller
+    zone_id: branch_a
+    name: Teller
+    base_permissions: ["deposit", "withdraw", "balance:view"]
+
+  # Loans department
+  - id: loan_officer
+    zone_id: branch_a_loans
+    name: Loan Officer
+    base_permissions: ["loan:process", "credit:check"]
+  - id: loan_manager
+    zone_id: branch_a_loans
+    name: Loan Manager
+    base_permissions: ["loan:approve"]
+
+  # Accounts department
+  - id: accountant
+    zone_id: branch_a_accounts
+    name: Accountant
+    base_permissions: ["account:open", "account:close"]
+
+  # Head Office roles
+  - id: risk_officer
+    zone_id: risk
+    name: Risk Officer
+    base_permissions: ["risk:report", "limit:set"]
+  - id: auditor
+    zone_id: audit
+    name: Auditor
+    base_permissions: ["audit:view_all"]
+
+# Since we have multiple branches, we need roles for each branch.
+# We'll duplicate the branch roles for Branch B using unique IDs.
+# (In a real system, you might generate them dynamically.)
+
+roles_extended:
+  - id: branch_manager_b
+    zone_id: branch_b
+    name: Branch Manager
+    base_permissions: ["transaction:approve_high", "staff:manage"]
+  - id: teller_b
+    zone_id: branch_b
+    name: Teller
+    base_permissions: ["deposit", "withdraw", "balance:view"]
+  - id: loan_officer_b
+    zone_id: branch_b_loans
+    name: Loan Officer
+    base_permissions: ["loan:process", "credit:check"]
+  - id: loan_manager_b
+    zone_id: branch_b_loans
+    name: Loan Manager
+    base_permissions: ["loan:approve"]
+  - id: accountant_b
+    zone_id: branch_b_accounts
+    name: Accountant
+    base_permissions: ["account:open", "account:close"]
+
+# Intra‑zone hierarchies
+role_hierarchy:
+  - role_id: branch_manager
+    parent_role_id: teller
+  - role_id: loan_manager
+    parent_role_id: loan_officer
+  - role_id: branch_manager_b
+    parent_role_id: teller_b
+  - role_id: loan_manager_b
+    parent_role_id: loan_officer_b
+
+# Gamma mappings (none needed, but we could have branch managers inherit from head office? Not necessary)
+
+constraints:
+  # Separation of duty: a teller cannot approve their own transaction
+  - id: sod_self_transaction
+    type: separation_of_duty
+    target: { operation_id: "transaction:approve_high" }
+    condition: { prohibited_relation: "self", attribute: "creator_id" }
+    is_negative: true
+    priority: 10
+
+  # Attribute-based: large withdrawals (>10k) require second approval
+  - id: attr_large_withdrawal
+    type: attribute
+    target: { operation_id: "withdraw" }
+    condition:
+      attribute: "amount"
+      operator: ">"
+      value: 10000
+    is_negative: false   # positive: must be satisfied (i.e., if amount > 10k, require second approval; but this constraint alone doesn't enforce second approval, it just checks a condition. For second approval, we'd need a separate operation.)
+    # Actually, we want that a withdrawal >10k can only be done if it has been approved. We'll handle that in the application logic.
+    # Simpler: we create a separate operation "withdraw_large" that requires both teller and manager roles.
+    # But for demonstration, we'll keep this attribute constraint as an example.
+    priority: 10
+
+  # Temporal: audit view only during business hours (9am-5pm)
+  - id: temporal_audit_view
+    type: temporal
+    target: { operation_id: "audit:view_all" }
+    condition: { time_range: ["09:00", "17:00"] }
+    is_negative: false
+    priority: 10
+
+# Sample users
+users:
+  - id: u1
+    username: alice
+    email: alice@bank.com
+    attributes: { branch: "branch_a" }
+  - id: u2
+    username: bob
+    email: bob@bank.com
+    attributes: { branch: "branch_a" }
+  - id: u3
+    username: carol
+    email: carol@bank.com
+    attributes: { branch: "branch_b" }
+  - id: u4
+    username: dave
+    email: dave@bank.com
+    attributes: { department: "risk" }
+  - id: u5
+    username: eve
+    email: eve@bank.com
+    attributes: { department: "audit" }
+
+# User‑Zone‑Role assignments
+assignments:
+  # Branch A
+  - user_id: u1
+    zone_id: branch_a
+    role_id: branch_manager
+  - user_id: u2
+    zone_id: branch_a
+    role_id: teller
+  - user_id: u2
+    zone_id: branch_a_loans
+    role_id: loan_officer
+  # Branch B
+  - user_id: u3
+    zone_id: branch_b
+    role_id: teller_b
+  # Risk
+  - user_id: u4
+    zone_id: risk
+    role_id: risk_officer
+  # Audit
+  - user_id: u5
+    zone_id: audit
+    role_id: auditor

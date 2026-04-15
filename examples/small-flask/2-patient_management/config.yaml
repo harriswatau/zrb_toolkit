@@ -1,0 +1,274 @@
+zones:
+  - id: hospital
+    name: Hospital
+  - id: cardiology
+    name: Cardiology Department
+    parent_id: hospital
+  - id: icu
+    name: ICU
+    parent_id: cardiology
+  - id: general_ward
+    name: General Ward
+    parent_id: cardiology
+  - id: radiology
+    name: Radiology Department
+    parent_id: hospital
+  - id: mri
+    name: MRI Unit
+    parent_id: radiology
+  - id: xray
+    name: X-Ray Unit
+    parent_id: radiology
+  - id: admin
+    name: Administration
+    parent_id: hospital
+
+operations:
+  # Admin operations
+  - id: user:manage
+    app_name: admin
+    name: Manage users
+  - id: dept:manage
+    app_name: admin
+    name: Manage departments
+
+  # Cardiology / patient care
+  - id: record:view
+    app_name: patient
+    name: View any patient record
+  - id: record:view_own
+    app_name: patient
+    name: View own patient record
+  - id: prescribe
+    app_name: treatment
+    name: Prescribe medication
+  - id: diagnose
+    app_name: treatment
+    name: Make diagnosis
+  - id: vitals:update
+    app_name: nursing
+    name: Update vital signs
+  - id: medication:administer
+    app_name: nursing
+    name: Administer medication
+
+  # ICU specific
+  - id: icu:access
+    app_name: icu
+    name: Access ICU area
+
+  # Radiology
+  - id: scan:perform
+    app_name: radiology
+    name: Perform scan
+  - id: image:view
+    app_name: radiology
+    name: View images
+  - id: report:approve
+    app_name: radiology
+    name: Approve radiology report
+
+  # Administration
+  - id: admit:process
+    app_name: admissions
+    name: Process admission
+  - id: bill:create
+    app_name: billing
+    name: Create bill
+
+  # Management reports
+  - id: staff:assign
+    app_name: management
+    name: Assign staff
+  - id: report:view
+    app_name: management
+    name: View departmental report
+
+roles:
+  # Hospital-wide admin
+  - id: admin
+    zone_id: hospital
+    name: System Admin
+    base_permissions: ["user:manage", "dept:manage"]
+
+  # Cardiology Department
+  - id: head_cardio
+    zone_id: cardiology
+    name: Head of Cardiology
+    base_permissions: ["staff:assign", "report:view"]
+  - id: doctor_cardio
+    zone_id: cardiology
+    name: Cardiologist
+    base_permissions: ["record:view", "prescribe", "diagnose"]
+  - id: nurse_cardio
+    zone_id: cardiology
+    name: Nurse
+    base_permissions: ["vitals:update", "medication:administer"]
+  - id: patient_cardio
+    zone_id: cardiology
+    name: Patient
+    base_permissions: ["record:view_own"]
+
+  # ICU (child of Cardiology)
+  - id: doctor_icu
+    zone_id: icu
+    name: ICU Doctor
+    base_permissions: ["icu:access"]   # inherits doctor permissions via gamma
+  - id: nurse_icu
+    zone_id: icu
+    name: ICU Nurse
+    base_permissions: ["icu:access"]   # inherits nurse permissions via gamma
+
+  # General Ward (child of Cardiology)
+  - id: doctor_ward
+    zone_id: general_ward
+    name: Ward Doctor
+    base_permissions: []   # inherits from doctor_cardio
+  - id: nurse_ward
+    zone_id: general_ward
+    name: Ward Nurse
+    base_permissions: []   # inherits from nurse_cardio
+
+  # Radiology Department
+  - id: head_radiology
+    zone_id: radiology
+    name: Head of Radiology
+    base_permissions: ["staff:assign", "report:view", "report:approve"]
+  - id: technician_radiology
+    zone_id: radiology
+    name: Radiologic Technologist
+    base_permissions: ["scan:perform", "image:view"]
+
+  # MRI Unit (child of Radiology)
+  - id: technician_mri
+    zone_id: mri
+    name: MRI Technician
+    base_permissions: []   # inherits from technician_radiology
+
+  # X-Ray Unit (child of Radiology)
+  - id: technician_xray
+    zone_id: xray
+    name: X-Ray Technician
+    base_permissions: []   # inherits from technician_radiology
+
+  # Administration
+  - id: clerk
+    zone_id: admin
+    name: Admission Clerk
+    base_permissions: ["admit:process", "bill:create"]
+
+# Intra‑zone role hierarchies (parent_role_id)
+# In Cardiology: head > doctor > nurse > patient (patient is junior)
+# We set parent_role_id to indicate seniority: a senior role inherits permissions from its junior.
+# The inheritance direction: senior (head) inherits from doctor, doctor inherits from nurse, etc.
+# To model that, we set parent_role_id of head_cardio to doctor_cardio, doctor_cardio to nurse_cardio, etc.
+# This way, when computing effective permissions for a role, we include base of all junior roles.
+
+# For simplicity, we set only direct parent-child relationships; the engine will traverse.
+
+role_hierarchy:
+  # Cardiology
+  - role_id: head_cardio
+    parent_role_id: doctor_cardio
+  - role_id: doctor_cardio
+    parent_role_id: nurse_cardio
+  - role_id: nurse_cardio
+    parent_role_id: patient_cardio
+  # ICU (head not defined; we may not need hierarchy there)
+  # Radiology
+  - role_id: head_radiology
+    parent_role_id: technician_radiology
+  # Administration: no hierarchy (only clerk)
+
+# Gamma mappings (inter-zone inheritance)
+gamma_mappings:
+  # ICU doctors inherit from Cardiology doctors
+  - child_zone_id: icu
+    child_role_id: doctor_icu
+    parent_zone_id: cardiology
+    parent_role_id: doctor_cardio
+    priority: 1
+  # ICU nurses inherit from Cardiology nurses
+  - child_zone_id: icu
+    child_role_id: nurse_icu
+    parent_zone_id: cardiology
+    parent_role_id: nurse_cardio
+    priority: 1
+  # Ward doctors inherit from Cardiology doctors
+  - child_zone_id: general_ward
+    child_role_id: doctor_ward
+    parent_zone_id: cardiology
+    parent_role_id: doctor_cardio
+    priority: 1
+  # Ward nurses inherit from Cardiology nurses
+  - child_zone_id: general_ward
+    child_role_id: nurse_ward
+    parent_zone_id: cardiology
+    parent_role_id: nurse_cardio
+    priority: 1
+  # MRI technicians inherit from Radiology technicians
+  - child_zone_id: mri
+    child_role_id: technician_mri
+    parent_zone_id: radiology
+    parent_role_id: technician_radiology
+    priority: 1
+  # X-Ray technicians inherit from Radiology technicians
+  - child_zone_id: xray
+    child_role_id: technician_xray
+    parent_zone_id: radiology
+    parent_role_id: technician_radiology
+    priority: 1
+
+constraints:
+  # Separation of duty: a doctor cannot prescribe for themselves
+  - id: sod_self_prescribe
+    type: separation_of_duty
+    target: { operation_id: "prescribe" }
+    condition: { prohibited_relation: "self" }
+    is_negative: true
+    priority: 10
+
+  # Temporal: access to patient records only during shift (simplified: 8am-8pm)
+  - id: temporal_record_view
+    type: temporal
+    target: { operation_id: "record:view" }
+    condition: { time_range: ["08:00", "20:00"] }
+    is_negative: false
+    priority: 10
+
+  # Attribute: only certain roles can view sensitive records (example)
+  # Not used here, but framework supports it.
+
+# Sample users (for testing)
+users:
+  - id: u1
+    username: alice
+    email: alice@hospital.com
+    attributes: { department: cardiology }
+  - id: u2
+    username: bob
+    email: bob@hospital.com
+    attributes: { department: radiology }
+  - id: u3
+    username: charlie
+    email: charlie@hospital.com
+    attributes: { department: admin }
+
+# User‑Zone‑Role assignments
+assignments:
+  - user_id: u1
+    zone_id: cardiology
+    role_id: doctor_cardio
+  - user_id: u1
+    zone_id: icu
+    role_id: doctor_icu   # also assigned in ICU
+  - user_id: u2
+    zone_id: radiology
+    role_id: technician_radiology
+  - user_id: u2
+    zone_id: mri
+    role_id: technician_mri
+  - user_id: u3
+    zone_id: admin
+    role_id: clerk
+    
